@@ -79,10 +79,15 @@ JavaScript Vanilla (sem frameworks)
 💡 Diferenciais
 
 ✔ Sistema de IA leve, mas altamente eficiente
+
 ✔ Mecânicas psicológicas de retenção
+
 ✔ Experiência dinâmica a cada partida
+
 ✔ Arquitetura desacoplada (lógica vs render)
+
 ✔ Projeto ideal para portfólio de jogos / frontend avançado
+
 
 🎯 Objetivo do Projeto
 
