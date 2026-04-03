@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SNAKE FORTUNE 🐍</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+    :root {
+      --px: #39FF14;
+      --px2: #00F5FF;
+      --px3: #FF006E;
+      --px4: #BF5FFF;
+      --gold: #FFD700;
+      --gold2: #FFA500;
+      --dark: #050508;
+      --dark2: #0a0010;
+      /* Game Boy Color - corpo amarelo Pikachu */
+      --gb-body: #E8C832;
+      --gb-body-dark: #C8A820;
+      --gb-body-shadow: #A08010;
+      --gb-screen-bezel: #2a2a3a;
+      --gb-screen-bg: #8BAC0F;
+      --gb-btn-a: #cc2222;
+      --gb-btn-b: #228833;
+      --gb-dpad: #2a2a5a;
+      --gb-text: #1a1a2e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; image-rendering: pixelated; }
+
+    body {
+      background: radial-gradient(ellipse at 40% 30%, #1a0a2e 0%, #0a0510 60%, #000 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      font-family: 'VT323', monospace;
+      overflow-x: hidden;
+      padding: 20px 10px 40px;
+    }
+
+    /* Scanlines globais */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+    }
+
+    canvas#particles {
+      position: fixed; inset: 0; pointer-events: none; z-index: 190;
+    }
+    #flash {
+      position: fixed; inset: 0; z-index: 180; pointer-events: none; opacity: 0;
+    }
+    #flash.fg { background: rgba(57,255,20,0.25); animation: flashA 0.3s ease forwards; }
+    #flash.fo { background: rgba(255,215,0,0.25); animation: flashA 0.4s ease forwards; }
+    #flash.fp { background: rgba(255,0,110,0.3);  animation: flashA 0.5s ease forwards; }
+    #flash.fr { background: rgba(255,0,0,0.3);    animation: flashA 0.35s ease forwards; }
+    #flash.fc { background: rgba(0,245,255,0.25); animation: flashA 0.3s ease forwards; }
+    #flash.fv { background: rgba(191,95,255,0.3); animation: flashA 0.5s ease forwards; }
+    @keyframes flashA { 0%{opacity:1} 100%{opacity:0} }
+
+    /* ===== WIN OVERLAY ===== */
+    #win-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 200; display: none;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    #win-overlay.show { display: flex; }
+    .win-box {
+      background: #000; max-width: 400px; width: 90%;
+      border: 3px solid var(--px);
+      box-shadow: 0 0 0 1px #001800, 0 0 30px var(--px), 0 0 80px rgba(57,255,20,0.15);
+      padding: 28px 32px; text-align: center; position: relative; overflow: hidden;
+    }
+    .win-box::before {
+      content: ''; position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(57,255,20,0.02) 3px, rgba(57,255,20,0.02) 4px);
+      pointer-events: none;
+    }
+    .win-box.lose { border-color: var(--px3); box-shadow: 0 0 0 1px #180000, 0 0 30px var(--px3); }
+    .win-title { font-family: 'Press Start 2P', monospace; font-size: clamp(14px,3vw,20px); margin-bottom: 10px; letter-spacing: 2px; }
+    .win-title.wt-win { color: var(--px); text-shadow: 0 0 12px var(--px); animation: wPulse 0.8s steps(2) infinite; }
+    .win-title.wt-lose { color: var(--px3); text-shadow: 0 0 12px var(--px3); }
+    .win-amount { font-family: 'Press Start 2P', monospace; font-size: clamp(18px,4vw,32px); color: var(--gold); text-shadow: 0 0 15px var(--gold); margin: 12px 0; }
+    .win-sub { font-size: 16px; color: rgba(255,255,255,0.35); letter-spacing: 3px; margin-bottom: 18px; }
+    .win-replay { font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; cursor: pointer; background: #000; border: 2px solid var(--gold); color: var(--gold); padding: 10px 20px; box-shadow: 0 0 12px rgba(255,215,0,0.3); transition: all 0.15s; }
+    .win-replay:hover { background: rgba(255,215,0,0.08); box-shadow: 0 0 25px rgba(255,215,0,0.5); transform: scale(1.05); }
+    @keyframes wPulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+
+    /* ===== GAME BOY SHELL ===== */
+    .gameboy {
+      width: 420px;
+      max-width: 100%;
+      position: relative;
+      filter: drop-shadow(0 20px 60px rgba(0,0,0,0.8)) drop-shadow(0 0 30px rgba(232,200,50,0.15));
+    }
+
+    /* Corpo superior - contém a tela */
+    .gb-top {
+      background: linear-gradient(160deg, #F0D040 0%, var(--gb-body) 40%, var(--gb-body-dark) 100%);
+      border-radius: 18px 18px 0 0;
+      padding: 18px 18px 0;
+      position: relative;
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,200,0.4),
+        inset -3px 0 0 var(--gb-body-shadow),
+        inset 3px 0 0 rgba(255,240,100,0.3);
+    }
+
+    /* Detalhes de canto arredondado do Game Boy */
+    .gb-top::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 18px;
+      background: linear-gradient(180deg, rgba(255,255,200,0.25) 0%, transparent 100%);
+      border-radius: 18px 18px 0 0;
+      pointer-events: none;
+    }
+
+    /* Label Game Boy Color */
+    .gb-label {
+      text-align: center;
+      padding: 6px 0 10px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      letter-spacing: 3px;
+      color: var(--gb-body-shadow);
+      text-shadow: 0 1px 0 rgba(255,240,100,0.4);
+    }
+    .gb-label span { color: #cc4400; }
+
+    /* Moldura da tela */
+    .gb-screen-bezel {
+      background: var(--gb-screen-bezel);
+      border-radius: 10px 10px 6px 6px;
+      padding: 12px 12px 16px;
+      position: relative;
+      box-shadow:
+        inset 0 4px 12px rgba(0,0,0,0.6),
+        inset 0 0 0 2px rgba(0,0,0,0.4),
+        0 2px 0 rgba(255,240,100,0.2);
+    }
+
+    /* Linhas decorativas acima da tela (estilo Game Boy original) */
+    .gb-screen-bezel::before {
+      content: '';
+      position: absolute;
+      top: 5px; left: 20px; right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #c44, #44c, transparent);
+      opacity: 0.6;
+    }
+
+    /* LED de power */
+    .gb-power-led {
+      position: absolute;
+      left: 16px; top: 10px;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #33ff44;
+      box-shadow: 0 0 6px #33ff44, 0 0 12px rgba(51,255,68,0.5);
+      animation: ledPulse 2s ease-in-out infinite;
+    }
+    @keyframes ledPulse {
+      0%,100% { opacity:1; box-shadow: 0 0 6px #33ff44, 0 0 12px rgba(51,255,68,0.5); }
+      50%      { opacity:0.6; box-shadow: 0 0 3px #33ff44; }
+    }
+
+    /* Tela do jogo */
+    .gb-screen {
+      background: #0a0f02;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.9), inset 0 0 0 2px #111;
+      /* Scanlines na tela */
+    }
+    .gb-screen::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px);
+      pointer-events: none; z-index: 10;
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100% !important;
+      height: auto !important;
+    }
+
+    /* ===== CORPO INFERIOR - CONTROLES ===== */
+    .gb-bottom {
+      background: linear-gradient(180deg, var(--gb-body-dark) 0%, var(--gb-body) 30%, #D4B820 100%);
+      border-radius: 0 0 28px 28px;
+      padding: 14px 18px 22px;
+      position: relative;
+      box-shadow:
+        inset 0 -3px 0 var(--gb-body-shadow),
+        inset -3px 0 0 var(--gb-body-shadow),
+        inset 3px 0 0 rgba(255,240,100,0.3);
+    }
+
+    /* Faixa de info (saldo, mult, timer) */
+    .gb-info-strip {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .gb-info-card {
+      flex: 1;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(57,255,20,0.3);
+      border-radius: 3px;
+      padding: 4px 6px;
+      text-align: center;
+    }
+    .gb-info-lbl {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 5px;
+      color: rgba(57,255,20,0.5);
+      letter-spacing: 1px;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .gb-info-val {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: var(--px);
+      text-shadow: 0 0 6px var(--px);
+    }
+    .gb-info-card.gold .gb-info-val { color: var(--gold); text-shadow: 0 0 6px var(--gold); }
+    .gb-info-card.red  .gb-info-val { color: var(--px3);  text-shadow: 0 0 6px var(--px3); }
+
+    /* Timer bar */
+    .gb-timer-wrap {
+      margin-bottom: 10px;
+    }
+    .gb-timer-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 3px;
+    }
+    .gb-timer-lbl {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 6px; color: rgba(57,255,20,0.5); letter-spacing: 1px;
+    }
+    #steps-count {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px; color: var(--px); text-shadow: 0 0 6px var(--px);
+    }
+    .gb-timer-bar {
+      height: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(57,255,20,0.2); border-radius: 2px; overflow: hidden;
+    }
+    #steps-fill {
+      height: 100%; background: var(--px); box-shadow: 0 0 6px var(--px); transition: width 0.2s; width: 100%;
+    }
+
+    /* ===== CONTROLES ESTILO GAME BOY ===== */
+    .gb-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    /* D-Pad (esquerda) */
+    .gb-dpad {
+      width: 90px; height: 90px;
+      position: relative; flex-shrink: 0;
+    }
+    .gb-dpad-h, .gb-dpad-v {
+      position: absolute;
+      background: linear-gradient(135deg, #3a3a6a, var(--gb-dpad));
+      border-radius: 4px;
+      box-shadow: 0 3px 0 #111, inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .gb-dpad-h { width: 90px; height: 30px; top: 30px; left: 0; }
+    .gb-dpad-v { width: 30px; height: 90px; top: 0; left: 30px; }
+    .gb-dpad-center {
+      position: absolute; width: 30px; height: 30px; top: 30px; left: 30px;
+      background: var(--gb-dpad); border-radius: 2px; z-index: 1;
+    }
+    /* Setas do dpad */
+    .gb-dpad::before {
+      content: '▲  ▼';
+      position: absolute; z-index: 2;
+      left: 30px; top: 0; width: 30px; height: 90px;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      padding: 4px 0;
+      font-size: 8px; color: rgba(255,255,255,0.3);
+      pointer-events: none;
+    }
+    .gb-dpad::after {
+      content: '◀  ▶';
+      position: absolute; z-index: 2;
+      top: 30px; left: 0; width: 90px; height: 30px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 4px;
+      font-size: 8px; color: rgba(255,255,255,0.3);
+      pointer-events: none;
+    }
+
+    /* Área central - aposta e botão */
+    .gb-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Input de aposta integrado */
+    .gb-bet-display {
+      background: rgba(0,0,0,0.8);
+      border: 2px solid rgba(57,255,20,0.4);
+      border-radius: 4px;
+      padding: 5px 8px;
+      width: 100%;
+      text-align: center;
+    }
+    .gb-bet-lbl {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 5px; color: rgba(57,255,20,0.4); letter-spacing: 1px; display: block; margin-bottom: 2px;
+    }
+    .gb-bet-input {
+      background: transparent; border: none; outline: none;
+      font-family: 'Press Start 2P', monospace; font-size: 11px;
+      color: var(--gold); text-shadow: 0 0 6px var(--gold);
+      width: 100%; text-align: center;
+    }
+    .gb-bet-input::-webkit-inner-spin-button { display: none; }
+
+    /* Quick bet buttons */
+    .gb-quick-bet {
+      display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; width: 100%;
+    }
+    .gb-qb {
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(57,255,20,0.25);
+      color: rgba(57,255,20,0.6);
+      font-family: 'Press Start 2P', monospace;
+      font-size: 5px; padding: 3px 5px; cursor: pointer; border-radius: 2px;
+      transition: all 0.1s;
+    }
+    .gb-qb:hover { border-color: var(--px); color: var(--px); box-shadow: 0 0 4px rgba(57,255,20,0.4); }
+
+    /* Botões A e B (direita) */
+    .gb-ab {
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 8px; flex-shrink: 0;
+    }
+    .gb-btn-a {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ff4444, var(--gb-btn-a));
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 0 #881111, 0 0 0 3px #1a0000, 0 4px 8px rgba(0,0,0,0.5);
+      font-family: 'Press Start 2P', monospace; font-size: 9px; color: rgba(255,255,255,0.8);
+      letter-spacing: 0;
+      transition: all 0.08s;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gb-btn-a:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #881111, 0 0 0 3px #1a0000, 0 5px 12px rgba(0,0,0,0.5); }
+    .gb-btn-a:active, .gb-btn-a.pressed { transform: translateY(3px); box-shadow: 0 1px 0 #881111, 0 0 0 3px #1a0000; }
+
+    .gb-btn-b {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #44bb55, var(--gb-btn-b));
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 0 #115522, 0 0 0 3px #001a00, 0 4px 8px rgba(0,0,0,0.5);
+      font-family: 'Press Start 2P', monospace; font-size: 8px; color: rgba(255,255,255,0.8);
+      transition: all 0.08s;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gb-btn-b:hover { transform: translateY(-1px); }
+    .gb-btn-b:active { transform: translateY(3px); box-shadow: 0 1px 0 #115522, 0 0 0 3px #001a00; }
+
+    /* SELECT / START */
+    .gb-select-start {
+      display: flex; justify-content: center; gap: 16px; margin-bottom: 8px;
+    }
+    .gb-small-btn {
+      background: linear-gradient(135deg, #2a2a2a, #111);
+      border: none; border-radius: 10px;
+      width: 52px; height: 14px; cursor: pointer;
+      box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255,255,255,0.1);
+      transition: all 0.08s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gb-small-btn span {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 5px; color: rgba(255,255,255,0.35); letter-spacing: 1px;
+    }
+    .gb-small-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #000; }
+
+    /* Event log e histórico */
+    .gb-log {
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(57,255,20,0.15);
+      border-radius: 3px;
+      padding: 5px 7px;
+      max-height: 72px;
+      overflow: hidden;
+    }
+    .event-list { display: flex; flex-direction: column; gap: 2px; }
+    .event-item {
+      font-size: 13px; padding: 1px 4px;
+      background: rgba(255,255,255,0.02);
+      animation: eSlide 0.2s steps(3);
+    }
+    .event-item.ev-normal { color: #ff7777; }
+    .event-item.ev-big    { color: var(--gold); }
+    .event-item.ev-insane { color: var(--px3); }
+    .event-item.ev-mult   { color: var(--px2); }
+    .event-item.ev-death  { color: #ff3333; }
+    .event-item.ev-win    { color: var(--px); }
+    .event-item.ev-bonus  { color: var(--px4); }
+    @keyframes eSlide { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:translateX(0)} }
+
+    /* Histórico */
+    .gb-hist { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
+    .hpill {
+      font-family: 'Press Start 2P', monospace; font-size: 6px;
+      padding: 2px 4px; border: 1px solid;
+      animation: hPop 0.2s steps(2);
+    }
+    .hpill.w { color: var(--px); border-color: rgba(57,255,20,0.4); background: rgba(57,255,20,0.05); }
+    .hpill.l { color: #ff5555; border-color: rgba(255,85,85,0.4); background: rgba(255,85,85,0.05); }
+    @keyframes hPop { from{transform:scale(0)} to{transform:scale(1)} }
+
+    /* Score/Mult display durante jogo */
+    .gb-mult-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,215,0,0.2);
+      border-radius: 3px; padding: 4px 8px; margin-bottom: 8px;
+    }
+    .gb-mult-lbl { font-family: 'Press Start 2P', monospace; font-size: 5px; color: rgba(255,215,0,0.4); letter-spacing: 1px; }
+    #mult-num { font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--gold); text-shadow: 0 0 8px var(--gold); }
+
+    /* Grade de altofalante (decorativo) */
+    .gb-speaker {
+      position: absolute; right: 18px; bottom: 22px;
+      display: grid; grid-template-columns: repeat(5,4px); gap: 3px;
+    }
+    .gb-speaker-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: rgba(0,0,0,0.4);
+      box-shadow: inset 0 1px 0 rgba(0,0,0,0.6);
+    }
+
+    /* Logo Nintendo no centro */
+    .gb-nintendo-logo {
+      text-align: center; margin-bottom: 8px;
+    }
+    .gb-nintendo-logo span {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 6px; color: rgba(0,0,0,0.35);
+      letter-spacing: 2px; border: 1px solid rgba(0,0,0,0.2);
+      padding: 1px 6px; border-radius: 10px;
+    }
+
+    /* Board-border para efeito de shake */
+    .board-border { position: relative; }
+    .board-border.screen-shake { animation: sShake 0.35s steps(4); }
+    .board-border.danger .gb-screen { box-shadow: inset 0 0 20px rgba(255,0,110,0.3); }
+    @keyframes sShake {
+      0%{transform:translate(0,0)} 25%{transform:translate(-4px,3px)}
+      50%{transform:translate(4px,-3px)} 75%{transform:translate(-3px,3px)} 100%{transform:translate(0,0)}
+    }
+
+    .timer-critical {
+      color: #ff0000 !important;
+      animation: pulse-red 0.3s infinite;
+      text-shadow: 0 0 10px red !important;
+    }
+    @keyframes pulse-red {
+      0%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.1)} 100%{opacity:1;transform:scale(1)}
+    }
+
+    .slowmo, .slowmo * { transition: all 0.4s cubic-bezier(0.25,1,0.5,1) !important; filter: contrast(1.2) brightness(1.1); }
+    .clutch-mode .gb-screen-bezel { box-shadow: inset 0 4px 12px rgba(255,0,110,0.3), 0 0 20px rgba(255,0,110,0.2); }
+
+    body.rumbling { animation: screenRumble 0.1s steps(1) infinite; }
+    @keyframes screenRumble {
+      0%{transform:translate(0,0)} 10%{transform:translate(-2px,2px)} 20%{transform:translate(2px,-2px)}
+      30%{transform:translate(-3px,1px)} 40%{transform:translate(3px,-1px)} 50%{transform:translate(-2px,3px)}
+      60%{transform:translate(2px,-3px)} 70%{transform:translate(-1px,2px)} 80%{transform:translate(1px,-2px)}
+      90%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)}
+    }
+
+    .dice-hidden { display: none !important; }
+
+    @media (max-width: 440px) {
+      .gameboy { width: 100%; }
+      .gb-dpad { width: 76px; height: 76px; }
+      .gb-dpad-h { width: 76px; height: 26px; top: 25px; }
+      .gb-dpad-v { width: 26px; height: 76px; left: 25px; }
+      .gb-dpad-center { width: 26px; height: 26px; top: 25px; left: 25px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="flash"></div>
+  <canvas id="particles"></canvas>
+
+  <!-- WIN OVERLAY -->
+  <div id="win-overlay">
+    <div class="win-box" id="win-box">
+      <div class="win-title" id="win-title">VITORIA!</div>
+      <div class="win-amount" id="win-amount">R$ 0,00</div>
+      <div class="win-sub" id="win-sub">MULT 1.00x</div>
+      <button class="win-replay" id="win-replay-btn">&#9654; JOGAR NOVAMENTE</button>
+    </div>
+  </div>
+
+  <!-- GAME BOY -->
+  <div class="gameboy">
+
+    <!-- PARTE SUPERIOR: tela -->
+    <div class="gb-top">
+      <div class="gb-label">SNAKE <span>FORTUNE</span> &bull; CASINO</div>
+
+      <div class="gb-screen-bezel">
+        <div class="gb-power-led"></div>
+        <div class="board-border" id="board-border">
+          <div class="gb-screen">
+            <canvas id="game-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARTE INFERIOR: controles -->
+    <div class="gb-bottom">
+
+      <!-- Multiplicador atual -->
+      <div class="gb-mult-row">
+        <span class="gb-mult-lbl">MULTIPLICADOR</span>
+        <span id="mult-num">1.00x</span>
+      </div>
+
+      <!-- Timer -->
+      <div class="gb-timer-wrap">
+        <div class="gb-timer-row">
+          <span class="gb-timer-lbl">TEMPO</span>
+          <span id="steps-count">12.0s</span>
+        </div>
+        <div class="gb-timer-bar">
+          <div id="steps-fill"></div>
+        </div>
+      </div>
+
+      <!-- Info cards: saldo, sessão, melhor -->
+      <div class="gb-info-strip">
+        <div class="gb-info-card">
+          <span class="gb-info-lbl">SALDO</span>
+          <span class="gb-info-val" id="balance">R$1000</span>
+        </div>
+        <div class="gb-info-card gold">
+          <span class="gb-info-lbl">MELHOR</span>
+          <span class="gb-info-val" id="best-win">R$0</span>
+        </div>
+        <div class="gb-info-card red">
+          <span class="gb-info-lbl">SESSÃO</span>
+          <span class="gb-info-val" id="session-result">R$0</span>
+        </div>
+      </div>
+
+      <!-- Logo Nintendo -->
+      <div class="gb-nintendo-logo"><span>SNAKE FORTUNE</span></div>
+
+      <!-- CONTROLES GAME BOY -->
+      <div class="gb-controls">
+
+        <!-- D-PAD (esquerda — decorativo) -->
+        <div class="gb-dpad">
+          <div class="gb-dpad-h"></div>
+          <div class="gb-dpad-v"></div>
+          <div class="gb-dpad-center"></div>
+        </div>
+
+        <!-- Centro: aposta + botão jogar -->
+        <div class="gb-center">
+          <div class="gb-bet-display">
+            <span class="gb-bet-lbl">APOSTA R$</span>
+            <input class="gb-bet-input" type="number" id="bet" value="50" min="1">
+          </div>
+          <div class="gb-quick-bet">
+            <button class="gb-qb" onclick="setQB(10)">10</button>
+            <button class="gb-qb" onclick="setQB(50)">50</button>
+            <button class="gb-qb" onclick="setQB(100)">100</button>
+            <button class="gb-qb" onclick="setQB(500)">500</button>
+            <button class="gb-qb" onclick="halfBet()">½</button>
+            <button class="gb-qb" onclick="dblBet()">×2</button>
+            <button class="gb-qb" onclick="maxBet()">MAX</button>
+          </div>
+        </div>
+
+        <!-- Botões A (jogar) e B (decorativo) -->
+        <div class="gb-ab">
+          <button class="gb-btn-a" id="play-btn" onclick="startGame()">▶</button>
+          <button class="gb-btn-b">B</button>
+        </div>
+
+      </div>
+
+      <!-- SELECT / START -->
+      <div class="gb-select-start">
+        <button class="gb-small-btn"><span>SELECT</span></button>
+        <button class="gb-small-btn"><span>START</span></button>
+      </div>
+
+      <!-- Log de eventos -->
+      <div class="gb-log">
+        <div class="event-list" id="event-list"></div>
+      </div>
+
+      <!-- Histórico de rodadas -->
+      <div class="gb-hist" id="hist-row"></div>
+
+      <!-- Grade de alto-falante decorativa -->
+      <div class="gb-speaker" id="gb-speaker"></div>
+
+    </div>
+  </div>
+
+<script>
+// ===== SPEAKER DOTS (decorativo) =====
+window.addEventListener('DOMContentLoaded', () => {
+  const sp = document.getElementById('gb-speaker');
+  if (sp) for (let i = 0; i < 20; i++) { const d = document.createElement('div'); d.className = 'gb-speaker-dot'; sp.appendChild(d); }
+});
+
+// ===== CONSTANTS =====
+const GRID = 20;
+const GZ = 22; 
+const CANVAS_SIZE = GRID * GZ;
+const DIRS = ['up','down','left','right'];
+const MAX_TIME = 20;
+const INITIAL_TIME = 12;
+const BASE_TICK = 90; // 🚀 FIXO: Velocidade constante e suave (~11 FPS estilo retro)
+
+// ===== STATE =====
+let balance = 1000, bestWin = 0, sessionResult = 0;
+let isPlaying = false;
+let gameRunning = false;
+let snake = [], fruits = {}, multiplier = 1;
+let fruitsEaten = 0;
+let bet = 0;
+let alive = true;
+let tensionLevel = 0;
+
+// SISTEMA DE SORTE
+let luckState = 0.5;
+let playerProfile = { skill: 0.5, aggression: 0.5, consistency: 0.5 };
+
+let timeLeft = INITIAL_TIME;
+let gameTimer = null;
+let slowMoActive = false;
+let currentDir = 'right'; 
+
+// ===== BET HELPERS =====
+function setQB(val) {
+  const el = document.getElementById('bet');
+  if (el) { el.value = val; bet = val; }
+}
+function halfBet() {
+  const el = document.getElementById('bet');
+  if (!el) return;
+  const v = Math.max(1, Math.floor(Number(el.value) / 2));
+  el.value = v; bet = v;
+}
+function dblBet() {
+  const el = document.getElementById('bet');
+  if (!el) return;
+  const v = Math.min(balance, Number(el.value) * 2);
+  el.value = v; bet = v;
+}
+function maxBet() {
+  const el = document.getElementById('bet');
+  if (!el) return;
+  el.value = balance; bet = balance;
+}
+
+// ===== SISTEMA DE RTP POR FAIXA =====
+// Lógica: apostas baixas pagam pouco mas frequente (engajamento)
+//         apostas altas pagam menos vezes e com cap no multiplicador
+function getBetTier(b) {
+  if (b <= 10)  return 'micro';   // R$1–10
+  if (b <= 50)  return 'low';     // R$11–50
+  if (b <= 100) return 'mid';     // R$51–100
+  if (b <= 300) return 'high';    // R$101–300
+  return 'whale';                  // R$301+
+}
+
+// Configuração por tier:
+// winChance    = probabilidade base de sobreviver até o fim (cobra não cai antes do tempo)
+// maxMult      = cap duro no multiplicador final
+// fakeFruitPct = % de frutas que são fake (não dão mult)
+// bombRate     = % de frutas que são bomba
+// bonusChance  = chance de spawnar fruta bônus de multiplicador
+// fruitMult    = ganho de mult por fruta normal
+const TIER_CONFIG = {
+  micro: { winChance:0.72, maxMult:1.6,  fakeFruitPct:0.20, bombRate:0.06, bonusChance:0.04, fruitMult:0.08, bigMult:0.15 },
+  low:   { winChance:0.60, maxMult:1.8,  fakeFruitPct:0.30, bombRate:0.10, bonusChance:0.06, fruitMult:0.07, bigMult:0.12 },
+  mid:   { winChance:0.45, maxMult:2.2,  fakeFruitPct:0.40, bombRate:0.13, bonusChance:0.07, fruitMult:0.06, bigMult:0.10 },
+  high:  { winChance:0.30, maxMult:2.5,  fakeFruitPct:0.50, bombRate:0.16, bonusChance:0.05, fruitMult:0.05, bigMult:0.08 },
+  whale: { winChance:0.18, maxMult:2.8,  fakeFruitPct:0.60, bombRate:0.20, bonusChance:0.04, fruitMult:0.04, bigMult:0.06 },
+};
+
+function getTierCfg() { return TIER_CONFIG[getBetTier(bet)]; }
+
+// Tabela de bônus também varia por tier
+function getBonusTable(currentBet) {
+  const tier = getBetTier(currentBet);
+  if (tier === 'micro') return [ { type:'mult2', weight:80 }, { type:'mult3', weight:10 }, { type:'mult5', weight:2  }, { type:'timeBoost', weight:30 } ];
+  if (tier === 'low')   return [ { type:'mult2', weight:70 }, { type:'mult3', weight:18 }, { type:'mult5', weight:3  }, { type:'timeBoost', weight:22 } ];
+  if (tier === 'mid')   return [ { type:'mult2', weight:60 }, { type:'mult3', weight:22 }, { type:'mult5', weight:5  }, { type:'timeBoost', weight:15 } ];
+  if (tier === 'high')  return [ { type:'mult2', weight:55 }, { type:'mult3', weight:25 }, { type:'mult5', weight:6  }, { type:'timeBoost', weight:10 } ];
+  return                        [ { type:'mult2', weight:50 }, { type:'mult3', weight:28 }, { type:'mult5', weight:8  }, { type:'timeBoost', weight:8  } ];
+}
+function getBonusChance(currentBet) { return getTierCfg().bonusChance; }
+
+// ===== BONUS DEFINITIONS =====
+const BONUS_CONFIG = {
+  mult2:     { icon:'🔷', color:'#00F5FF', glow:'rgba(0,245,255,0.8)', mult:1.3, label:'x1.3 MULT' },
+  mult3:     { icon:'🔶', color:'#FFA500', glow:'rgba(255,165,0,0.8)', mult:1.6, label:'x1.6 MULT' },
+  mult5:     { icon:'💎', color:'#FF006E', glow:'rgba(255,0,110,0.9)', mult:2.0, label:'x2.0 MULT' },
+  timeBoost: { icon:'⏱️', color:'#22c55e', glow:'rgba(34,197,94,0.8)', mult:0,   label:'+4s TIME'  },
+};
+
+const FRUIT_TYPES = {
+  normal:     { icon:'🍎', color:'#cc0000', glow:'rgba(200,0,0,0.7)', mult:0.1,  wallBonus:0, label:'FRUTA' },
+  big:        { icon:'⭐', color:'#FFD700', glow:'rgba(255,215,0,0.8)', mult:0.2,  wallBonus:0.1, label:'BIG' },
+  bomb:       { icon:'💣', color:'#444',    glow:'rgba(255,80,0,0.8)',  mult:-0.2, wallBonus:0,  label:'BOMBA' },
+  timeFruit:  { icon:'⏳', color:'#00FFFF', glow:'rgba(0,255,255,0.9)', mult:0, label:'TIME JACKPOT' }
+};
+
+// ===== CANVAS SETUP =====
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = CANVAS_SIZE;
+canvas.height = CANVAS_SIZE;
+
+// ===== AUDIO =====
+const AC = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function getAC() { if (!audioCtx) audioCtx = new AC(); return audioCtx; }
+function beep(freq, dur, type='square', vol=0.15) {
+  try {
+    const ac = getAC(); const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type = type; o.frequency.setValueAtTime(freq, ac.currentTime);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.start(); o.stop(ac.currentTime + dur);
+  } catch(e){}
+}
+function playEat()    { beep(880,0.05,'square',0.2); }
+function playBigEat() { beep(660,0.08,'square',0.25); }
+function playDeath()  { beep(150,0.3,'sawtooth',0.3); }
+function playWin()    { [440,550,660,880].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'square',0.2),i*50)); }
+function playMove()   { beep(200,0.02,'triangle',0.05); }
+function playJackpot() { [880, 1100, 880, 1100].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'sine',0.3),i*80)); }
+
+// ===== HELPERS =====
+function xy(idx)  { return { x: idx % GRID, y: Math.floor(idx / GRID) }; }
+function idx(x,y) { return y * GRID + x; }
+function wallDist(i) {
+  const {x,y} = xy(i);
+  return Math.min(x, y, GRID-1-x, GRID-1-y);
+}
+function lerp(a,b,t) { return a + (b-a)*t; }
+
+function cleanUpUI() {
+    for(let i=0; i<6; i++) { const d = document.getElementById(`die-${i}`); if(d) d.style.display = 'none'; }
+    const dirRow = document.getElementById('dice-dir-row'); if(dirRow) dirRow.style.display = 'none';
+    const hint = document.getElementById('dice-hint'); if(hint) hint.style.display = 'none';
+}
+
+// ===== INIT =====
+function initSnake() {
+  cleanUpUI();
+  const cx = Math.floor(GRID/2), cy = Math.floor(GRID/2);
+  snake = [idx(cx,cy), idx(cx-1,cy), idx(cx-2,cy), idx(cx-3,cy)];
+  fruits = {};
+  multiplier = 1;
+  fruitsEaten = 0;
+  alive = true;
+  gameRunning = false;
+  timeLeft = INITIAL_TIME;
+  slowMoActive = false;
+  currentDir = 'right'; 
+  tensionLevel = 0;
+  adjustDifficultyBasedOnProfile(); 
+  maintainFruits();
+  updateUI(); 
+}
+
+// SISTEMA DE PERFIL E SORTE
+function adjustDifficultyBasedOnProfile() {
+  if (playerProfile.skill > 0.7) { luckState = Math.max(0.2, luckState - 0.1); } 
+  else if (playerProfile.skill < 0.4) { luckState = Math.min(0.8, luckState + 0.1); }
+}
+
+function updateLuck() {
+  if (timeLeft < 4) luckState += 0.02;
+  if (multiplier > 4) luckState -= 0.01;
+  if (sessionResult < -bet * 3) luckState += 0.05;
+  luckState = Math.max(0.1, Math.min(0.9, luckState));
+}
+
+function updatePlayerProfile(won, fruits) {
+  let performance = fruits / 10; if (won) performance += 0.2;
+  playerProfile.skill = lerp(playerProfile.skill, performance, 0.2);
+  if (timeLeft < 2 && won) playerProfile.aggression += 0.05; else if (timeLeft > 10) playerProfile.aggression -= 0.02;
+  playerProfile.consistency = lerp(playerProfile.consistency, won ? 1 : 0, 0.1);
+  for (let k in playerProfile) { playerProfile[k] = Math.max(0, Math.min(1, playerProfile[k])); }
+}
+
+// ===== SPAWN SYSTEM =====
+function getBonusChance(currentBet) {
+  if (currentBet < 5) return 0.02; if (currentBet < 10) return 0.05; if (currentBet < 20) return 0.08; return 0.12; 
+}
+function getBonusTable(currentBet) {
+  if (currentBet < 10) return [ { type: 'mult2', weight: 60 }, { type: 'mult3', weight: 15 }, { type: 'mult5', weight: 3 },  { type: 'timeBoost', weight: 22 } ];
+  return [ { type: 'mult2', weight: 50 }, { type: 'mult3', weight: 25 }, { type: 'mult5', weight: 8 }, { type: 'timeBoost', weight: 17 } ];
+}
+function getWeightedBonus(bet) {
+  const table = getBonusTable(bet); const total = table.reduce((s, b) => s + b.weight, 0);
+  let r = Math.random() * total;
+  for (const b of table) { if ((r -= b.weight) <= 0) return b.type; } return 'mult2';
+}
+
+function spawnFruitSmart() {
+  const occupied = new Set(snake); const available = [];
+  for (let i = 0; i < GRID*GRID; i++) { if (!occupied.has(i) && !fruits[i]) available.push(i); }
+  if (available.length === 0) return; let pos;
+  const spawnChance = (tensionLevel * 0.5) + (luckState * 0.5);
+  if (Math.random() < spawnChance) {
+    const head = xy(snake[0]);
+    const near = available.filter(i => { const {x,y} = xy(i); const d = Math.abs(x - head.x) + Math.abs(y - head.y); return d >= 2 && d <= 4; });
+    if (near.length > 0) pos = near[Math.floor(Math.random() * near.length)];
+  }
+  if (!pos) {
+    if (Math.random() > luckState && available.length > 5) { pos = available[Math.floor(Math.random() * available.length)]; }
+    else { pos = available[Math.floor(Math.random() * available.length)]; }
+  }
+  const wd = wallDist(pos); let type = 'normal'; let isBonus = false;
+  const cfg = getTierCfg();
+  const roll = Math.random(); const bonusChance = cfg.bonusChance; const streakBonus = (fruitsEaten > 5) ? 0.03 : 0;
+  if (Math.random() < 0.04) { type = 'timeFruit'; isBonus = true; }
+  else if (roll < (bonusChance + streakBonus)) { isBonus = true; type = getWeightedBonus(bet); }
+  else { const r = Math.random(); if (r < cfg.bombRate) type = 'bomb'; else if (r < cfg.bombRate + 0.15) type = 'big'; else type = 'normal'; }
+  fruits[pos] = { type, wd, pulse: Math.random() * Math.PI * 2, isBonus, almostAnim: 0,
+    isFake: (!isBonus && type !== 'timeFruit' && type !== 'bomb' && Math.random() < cfg.fakeFruitPct)
+  };
+}
+
+function maintainFruits() {
+  const desired = 4 + Math.floor(fruitsEaten / 3); let safety = 0;
+  while (Object.keys(fruits).length < desired && safety < 50) { spawnFruitSmart(); safety++; }
+}
+
+// ===== GAME FEEL =====
+function updateTension() { tensionLevel = 0; if (timeLeft < 6) tensionLevel += 0.4; if (timeLeft < 3) tensionLevel += 0.4; if (multiplier > 3) tensionLevel += 0.2; tensionLevel = Math.min(1, tensionLevel); }
+function getPhase() { if (timeLeft > 8) return 'early'; if (timeLeft > 4) return 'mid'; if (timeLeft > 2) return 'late'; return 'clutch'; }
+
+function applyGameFeel() {
+  const phase = getPhase();
+  if (phase === 'clutch') {
+    document.body.classList.add('clutch-mode');
+    if (Math.random() < 0.6) spawnFruitSmart();
+  } else {
+    document.body.classList.remove('clutch-mode');
+    if (phase === 'late' && Math.random() < 0.3) spawnFruitSmart();
+  }
+}
+
+// ===== DRAW =====
+let animFrame = 0; let bgIntensity = 0; 
+function draw() {
+  animFrame++; const t = animFrame / 30;
+  const targetIntensity = Math.min(1, (multiplier - 1) / 10);
+  bgIntensity += (targetIntensity - bgIntensity) * 0.05;
+  ctx.clearRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
+  if (bgIntensity > 0) { ctx.fillStyle = `rgba(${Math.floor(bgIntensity*30)},${Math.floor(bgIntensity*10)},0,0.2)`; ctx.fillRect(0,0,CANVAS_SIZE,CANVAS_SIZE); }
+  ctx.strokeStyle = `rgba(57,255,20,${0.05 + bgIntensity*0.1})`; ctx.lineWidth = 1;
+  for (let i = 0; i <= GRID; i++) { ctx.beginPath(); ctx.moveTo(i*GZ,0); ctx.lineTo(i*GZ,CANVAS_SIZE); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i*GZ); ctx.lineTo(0,i*GZ,CANVAS_SIZE); ctx.stroke(); }
+
+  for (const [posStr, ft] of Object.entries(fruits)) {
+    const pos = parseInt(posStr); const {x, y} = xy(pos);
+    let fd = ft.type === 'timeFruit' ? FRUIT_TYPES['timeFruit'] : (ft.isBonus ? BONUS_CONFIG[ft.type] : FRUIT_TYPES[ft.type]);
+    if (!fd) continue;
+    ft.pulse += 0.05 + (bgIntensity * 0.05);
+    let scaleMult = 1;
+    if (ft.almostAnim > 0) { ft.almostAnim--; scaleMult = 1.3 + Math.sin(ft.almostAnim * 0.5) * 0.2; }
+    const isRisky = ft.wd <= 2;
+    const pulseMag = (0.1 + (isRisky ? 0.15 : 0) + (bgIntensity * 0.1)) * scaleMult;
+    const ps = 1 + Math.sin(ft.pulse) * pulseMag;
+    const cx2 = x * GZ + GZ/2, cy2 = y * GZ + GZ/2;
+    const sz = GZ * 0.55 * ps;
+    ctx.save(); ctx.globalAlpha = 0.6; ctx.shadowColor = fd.glow; ctx.shadowBlur = (isRisky ? GZ*1.2 : GZ*0.8) * scaleMult; if (ft.type === 'timeFruit') ctx.shadowBlur = GZ * 1.5; ctx.fillStyle = fd.color; ctx.fillRect(cx2-sz/2, cy2-sz/2, sz, sz); ctx.restore();
+    ctx.save(); ctx.globalAlpha = 1; ctx.fillStyle = fd.color; const fsz = GZ * 0.45 * ps; ctx.fillRect(cx2-fsz/2, cy2-fsz/2, fsz, fsz); ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(cx2-fsz/2+1, cy2-fsz/2+1, fsz*0.35, fsz*0.35); ctx.restore();
+    ctx.save(); ctx.font = `${Math.floor(GZ*0.55*ps)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(fd.icon, cx2, cy2+1); ctx.restore();
+  }
+
+  snake.forEach((pos, i) => {
+    const {x, y} = xy(pos); const isHead = i === 0; const isTail = i === snake.length - 1;
+    const cx2 = x * GZ, cy2 = y * GZ; const margin = isHead ? 1 : isTail ? 3 : 2; const sz = GZ - margin*2;
+    ctx.save();
+    if (isHead) { ctx.shadowColor = '#39FF14'; ctx.shadowBlur = 12; ctx.fillStyle = '#39FF14'; }
+    else if (isTail) { ctx.fillStyle = '#0a3300'; ctx.globalAlpha = 0.6; }
+    else { const pct = 1 - (i / snake.length); ctx.fillStyle = `rgb(${Math.floor(20 * pct + 5)},${Math.floor(160 * pct + 40)},10)`; ctx.shadowColor = 'rgba(57,255,20,0.3)'; ctx.shadowBlur = 6; }
+    ctx.fillRect(cx2+margin, cy2+margin, sz, sz);
+    if (isHead) { ctx.fillStyle = '#000'; ctx.fillRect(cx2+margin+4, cy2+margin+4, 2, 2); ctx.fillRect(cx2+GZ-margin-6, cy2+margin+4, 2, 2); }
+    ctx.restore();
+  });
+}
+
+// ===== COMPUTE MOVE (ANTI-FREEZE) =====
+function computeMove() {
+  const headIdx = snake[0];
+  const {x: hx, y: hy} = xy(headIdx);
+  const moves = [ {name:'up', dx:0, dy:-1}, {name:'down', dx:0, dy:1}, {name:'left', dx:-1, dy:0}, {name:'right', dx:1, dy:0} ];
+  
+  const reverseMap = { up:'down', down:'up', left:'right', right:'left' };
+
+  // 🎰 CASSINO: chance de bater na parede baseada no tier de aposta
+  // Quanto maior a aposta, maior a chance de crash (menor winChance)
+  const cfg = getTierCfg();
+  const crashChance = (1 - cfg.winChance) * 0.08; // escala suave por tick
+  if (Math.random() < crashChance) {
+    const straightMove = moves.find(m => m.name === currentDir);
+    if (straightMove) {
+      const nx = hx + straightMove.dx, ny = hy + straightMove.dy;
+      const crashBody = new Set(snake.slice(0, snake.length - 1));
+      const wouldCrash = nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || crashBody.has(idx(nx, ny));
+      if (wouldCrash) {
+        return currentDir;
+      }
+    }
+  }
+
+  // 1. Identificar movimentos válidos (sem paredes, sem corpo)
+  let validMoves = moves.filter(m => {
+    const nx = hx + m.dx, ny = hy + m.dy;
+    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return false;
+    const nextIdx = idx(nx, ny);
+    const willEat = !!fruits[nextIdx];
+    // Se vai comer fruta, cobra cresce — não pode ir para nenhuma posição do corpo
+    // Se não vai comer, a cauda some — pode ir para a posição da cauda
+    const bodyToCheck = willEat ? snake : snake.slice(0, snake.length - 1);
+    return !new Set(bodyToCheck).has(nextIdx);
+  });
+
+  // Se não houver movimentos válidos, continuar na direção atual (vai bater no próximo tick)
+  if (validMoves.length === 0) return currentDir;
+
+  // 2. Filtrar movimentos para trás
+  let forwardMoves = validMoves.filter(m => m.name !== reverseMap[currentDir]);
+  if (forwardMoves.length === 0) forwardMoves = validMoves;
+
+  // 3. Filtro de "Sorte" (evitar paredes próximas)
+  if (Math.random() < luckState * 0.3 && forwardMoves.length > 1) {
+     const luckyMoves = forwardMoves.filter(m => {
+        const nx = hx + m.dx, ny = hy + m.dy;
+        const dist = Math.min(nx, ny, GRID-1-nx, GRID-1-ny);
+        return dist > 1;
+     });
+     if (luckyMoves.length > 0) forwardMoves = luckyMoves;
+  }
+
+  // 4. Lógica de Busca por Fruta
+  let bestMoveForFruit = null;
+  if (Math.random() < 0.3 && Object.keys(fruits).length > 0) {
+    let target = null; let minDist = Infinity;
+    for (const f of Object.keys(fruits)) {
+      const {x, y} = xy(Number(f)); const d = Math.abs(x - hx) + Math.abs(y - hy);
+      if (d < minDist) { minDist = d; target = {x, y}; }
+    }
+    if (target) {
+      const sortedMoves = [...forwardMoves].sort((a, b) => {
+        const da = Math.abs((hx + a.dx) - target.x) + Math.abs((hy + a.dy) - target.y);
+        const db = Math.abs((hx + b.dx) - target.x) + Math.abs((hy + b.dy) - target.y);
+        return da - db;
+      });
+      bestMoveForFruit = sortedMoves[0].name;
+    }
+  }
+
+  // 5. Pesos
+  const weightedMoves = [];
+  forwardMoves.forEach(m => {
+    let weight = 1;
+    if (m.name === currentDir) weight += 1.5; 
+    const nx = hx + m.dx, ny = hy + m.dy;
+    const dist = Math.min(nx, ny, GRID-1-nx, GRID-1-ny);
+    if (dist <= 1) weight *= 0.6;
+    if (bestMoveForFruit && m.name === bestMoveForFruit) weight += 3; 
+    const count = Math.max(1, Math.floor(weight * 10));
+    for (let i = 0; i < count; i++) weightedMoves.push(m);
+  });
+
+  // 6. ESCOLHA FINAL
+  let choice = null;
+  if (weightedMoves.length > 0) {
+    choice = weightedMoves[Math.floor(Math.random() * weightedMoves.length)];
+  }
+  if (!choice && forwardMoves.length > 0) {
+    choice = forwardMoves[Math.floor(Math.random() * forwardMoves.length)];
+  }
+  if (!choice && validMoves.length > 0) {
+    choice = validMoves[Math.floor(Math.random() * validMoves.length)];
+  }
+  if (!choice) {
+    choice = moves.find(m => m.name === currentDir);
+  }
+
+  if (choice) {
+    currentDir = choice.name;
+    return currentDir;
+  }
+  
+  return currentDir;
+}
+
+function applyDir(x,y,dir) {
+  if (dir==='up')    return {x, y:y-1};
+  if (dir==='down')  return {x, y:y+1};
+  if (dir==='left')  return {x:x-1, y};
+  if (dir==='right') return {x:x+1, y};
+  return {x,y};
+}
+
+// ===== GAME LOOP (TICK FIXO) =====
+async function gameLoop() {
+  gameRunning = true;
+
+  while (gameRunning) {
+    if (alive) {
+      stepSnake();
+    }
+    // Só o timer encerra o jogo (gameRunning = false vem do timer)
+    await sleep(BASE_TICK);
+  }
+
+  // Chegou aqui porque o timer zerou — encerra o jogo
+  if (isPlaying) endRun();
+}
+
+function stepSnake() {
+  const headPos = snake[0];
+  const {x:hx, y:hy} = xy(headPos);
+  
+  updateTension(); updateLuck();
+  
+  // Checar "Almost Win" (proximidade de fruta)
+  for (const fIdx of Object.keys(fruits)) {
+    const {x: fx, y: fy} = xy(Number(fIdx));
+    const dist = Math.abs(fx - hx) + Math.abs(fy - hy);
+    if (dist === 1) { 
+        if (!slowMoActive && Math.random() < 0.5) {
+          activateSlowMo(); triggerAlmostWin(Number(fIdx)); addEvent("🍎 QUASE PEGOU!", "ev-big");
+        }
+        break; 
+    }
+  }
+
+  // Decidir movimento
+  let chosenDir = computeMove();
+
+  // 🔥 CORREÇÃO DE BUG: Se falhar, não mata, apenas continua
+  if (!chosenDir) {
+    chosenDir = currentDir;
+  }
+
+  const {x:nx, y:ny} = applyDir(hx, hy, chosenDir);
+  playMove();
+
+  const newIdx = idx(nx, ny);
+  const willEat = !!fruits[newIdx];
+
+  // Se vai comer fruta, a cauda NÃO se move (cobra cresce), então verifica o corpo todo
+  // Se não vai comer, a cauda se move, então pode ignorar o último segmento
+  const bodyToCheck = willEat ? snake : snake.slice(0, snake.length - 1);
+  const bodySet = new Set(bodyToCheck);
+
+  if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || bodySet.has(newIdx)) {
+    alive = false;
+    addEvent('💀 AUTO-COLISÃO!', 'ev-death');
+    screenShake('medium');
+    draw();
+    return;
+  }
+  snake.unshift(newIdx);
+
+  if (fruits[newIdx]) {
+    const ft = fruits[newIdx]; delete fruits[newIdx]; handleFruitEaten(ft, newIdx);
+  } else { snake.pop(); }
+  
+  draw();
+}
+
+// 🎬 SLOW MOTION APENAS VISUAL
+function activateSlowMo() {
+  if (slowMoActive) return;
+  slowMoActive = true;
+  document.body.classList.add("slowmo");
+  setTimeout(() => {
+    slowMoActive = false;
+    document.body.classList.remove("slowmo");
+  }, 400);
+}
+
+function triggerAlmostWin(fruitIdx) {
+  if (!fruits[fruitIdx]) return; fruits[fruitIdx].almostAnim = 15; 
+}
+
+function handleFruitEaten(ft, pos) {
+  fruitsEaten++;
+
+  // 🎰 FRUTA FAKE: faz efeito visual mas não dá recompensa
+  if (ft.isFake) {
+    playEat();
+    addEvent(`🍎 MISS!`, 'ev-death'); // pequena dica visual de que era fake
+    maintainFruits(); updateUI();
+    return;
+  }
+
+  const rewind = 1 + Math.random() * 1.5;
+  timeLeft = Math.min(MAX_TIME, timeLeft + rewind);
+  
+  if (ft.type === 'timeFruit') {
+    timeLeft = Math.min(MAX_TIME, timeLeft + 5);
+    addEvent(`⏳ TIME +5s!`, 'ev-insane'); particles('cyan'); screenShake('hard'); playJackpot();
+  } else if (ft.isBonus) {
+    const bonus = BONUS_CONFIG[ft.type];
+    if (ft.type === 'timeBoost') {
+      timeLeft = Math.min(MAX_TIME, timeLeft + 4);
+      addEvent(`+4s BOOST!`, 'ev-bonus'); particles('cyan');
+    } else {
+      // mult2, mult3, mult5
+      const cfg = getTierCfg();
+      const oldMult = multiplier;
+      multiplier = Math.min(cfg.maxMult, multiplier * BONUS_CONFIG[ft.type].mult);
+      addEvent(`${BONUS_CONFIG[ft.type].label} ${oldMult.toFixed(2)}x → ${multiplier.toFixed(2)}x`, 'ev-insane');
+      particles('all'); screenShake('medium');
+    }
+    beep(600, 0.1, 'square', 0.2);
+  } else {
+    const fd = FRUIT_TYPES[ft.type];
+    const cfg = getTierCfg();
+    if (ft.type === 'bomb') {
+      multiplier = Math.max(1, multiplier - 0.15);
+      addEvent(`BOMBA! Mult caiu.`, 'ev-death'); screenShake('soft'); beep(150,0.2,'sawtooth',0.2);
+    } else {
+      const gain = ft.type === 'big' ? cfg.bigMult : cfg.fruitMult;
+      multiplier = Math.min(cfg.maxMult, multiplier + gain);
+      playEat();
+      if (ft.type === 'big') { addEvent(`BIG! +${gain.toFixed(2)}x`, 'ev-big'); particles('gold'); }
+    }
+  }
+  maintainFruits(); updateUI();
+}
+
+// ===== TIMER SYSTEM =====
+function startTimer() {
+  if (gameTimer) clearInterval(gameTimer);
+  gameTimer = setInterval(() => {
+    if (!gameRunning) { clearInterval(gameTimer); gameTimer = null; return; }
+    applyGameFeel(); 
+    let decay = 0.1;
+    if (timeLeft < 10) decay = 0.13; if (timeLeft < 5) decay = 0.18; if (timeLeft < 2) decay = 0.25;
+    timeLeft -= decay;
+    if (timeLeft < 3 && Math.random() < 0.1 && Object.keys(fruits).length < 3) {
+        spawnFruitSmart(); addEvent(`⚠️ AJUDA!`, 'ev-bonus'); 
+    }
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateTimerUI();
+      clearInterval(gameTimer); gameTimer = null;
+      gameRunning = false;
+      // Timer encerra o jogo — gameLoop vai acordar e ver gameRunning=false, chamar endRun
+      return;
+    }    
+    updateTimerUI();
+  }, 100);
+}
+
+// ===== GAME CONTROL =====
+async function startGame() {
+  if (isPlaying) return;
+  const betInput = document.getElementById('bet');
+  if(!betInput) return;
+  bet = Number(betInput.value);
+  if (bet <= 0 || bet > balance) { addEvent('Saldo insuficiente!','ev-death'); return; }
+
+  const overlay = document.getElementById('win-overlay');
+  if(overlay) overlay.classList.remove('show');
+  const playBtn = document.getElementById('play-btn');
+  if(playBtn) playBtn.disabled = true;
+
+  balance -= bet; isPlaying = true; alive = true;
+
+  initSnake(); 
+  draw();
+  addEvent('GO! RÁPIDO!', 'ev-big');
+  
+  startTimer();
+  await gameLoop();
+}
+
+function endRun() {
+  if (!isPlaying) return;
+  isPlaying = false; clearInterval(gameTimer);
+  document.body.classList.remove('clutch-mode');
+
+  // Salvar valores ANTES de qualquer reset
+  const finalMult = multiplier;
+  const finalFruits = fruitsEaten;
+  const winAmt = Math.round(bet * finalMult * 100) / 100;
+  const won = alive && timeLeft <= 0 && finalFruits > 0;
+
+  updatePlayerProfile(won, finalFruits);
+
+  if (won) {
+    balance += winAmt; sessionResult += (winAmt - bet);
+    if (winAmt > bestWin) bestWin = winAmt;
+    addHistory(true, winAmt - bet);
+    addEvent(`TEMPO ESGOTADO! CASH OUT: R$${winAmt.toFixed(2)}`, 'ev-win');
+    playWin();
+  } else {
+    sessionResult -= bet; addHistory(false, bet);
+    addEvent(`GAME OVER! Perdeu R$${bet.toFixed(2)}`, 'ev-death');
+    playDeath(); screenShake('medium');
+  }
+  updateUI(); showResult(bet, winAmt, won, finalMult, finalFruits);
+  const playBtn = document.getElementById('play-btn');
+  if(playBtn) playBtn.disabled = false;
+}
+
+// ===== UI UPDATES =====
+function updateUI() { updateBalanceUI(); updateTimerUI(); updateMultUI(); }
+function updateBalanceUI() {
+  const el = document.getElementById('balance');
+  if(el) el.textContent = 'R$'+balance.toFixed(2).replace('.',',');
+  const sr = document.getElementById('session-result');
+  if(sr) sr.textContent = (sessionResult>=0?'+':'-')+'R$'+Math.abs(sessionResult).toFixed(0);
+  const bw = document.getElementById('best-win');
+  if(bw) bw.textContent = 'R$'+bestWin.toFixed(0);
+}
+function updateTimerUI() {
+  const stepsEl = document.getElementById('steps-count');
+  const fillEl = document.getElementById('steps-fill');
+  if (stepsEl) {
+    stepsEl.textContent = timeLeft.toFixed(1) + 's';
+    if (timeLeft <= 3) stepsEl.classList.add('timer-critical');
+    else stepsEl.classList.remove('timer-critical');
+  }
+  if (fillEl) {
+    const pct = Math.min(100, (timeLeft / MAX_TIME) * 100);
+    fillEl.style.width = pct + '%';
+    fillEl.style.background = timeLeft <= 3 ? '#ff0000' : (timeLeft <= 8 ? '#fbbf24' : '#22c55e');
+  }
+}
+function updateMultUI() {
+  const el = document.getElementById('mult-num');
+  if(el) el.textContent = multiplier.toFixed(2) + 'x';
+}
+function showResult(betVal, winAmt, won, finalMult, finalFruits) {
+  const ov = document.getElementById('win-overlay');
+  const box = document.getElementById('win-box');
+  const title = document.getElementById('win-title');
+  const amt = document.getElementById('win-amount');
+  const sub = document.getElementById('win-sub');
+  if(!box || !title || !amt || !sub) return;
+  box.className = 'win-box';
+  if (won) {
+    box.classList.add('win'); title.textContent = 'SURVIVEU!';
+    title.className = 'win-title wt-win'; amt.style.color = '#22c55e';
+    amt.textContent = 'R$' + winAmt.toFixed(2).replace('.',',');
+    sub.textContent = `MULT x${finalMult.toFixed(2)} • FRUTAS: ${finalFruits}`;
+  } else {
+    box.classList.add('lose'); title.textContent = 'GAME OVER';
+    title.className = 'win-title wt-lose'; amt.style.color = '#ff4444';
+    amt.textContent = '-R$' + betVal.toFixed(2).replace('.',',');
+    sub.textContent = `MULT x${finalMult.toFixed(2)} • FRUTAS: ${finalFruits}`;
+  }
+  if(ov) ov.classList.add('show');
+}
+function addEvent(msg, cls) {
+  const list = document.getElementById('event-list');
+  if(!list) return;
+  const d = document.createElement('div');
+  d.className = `event-item ${cls}`; d.textContent = msg;
+  list.insertBefore(d,list.firstChild);
+  while(list.children.length>10) list.removeChild(list.lastChild);
+}
+function addHistory(won, amt) {
+  const row = document.getElementById('hist-row');
+  if(!row) return;
+  const p = document.createElement('div');
+  p.className = 'hpill '+(won?'w':'l');
+  p.textContent = (won?'+':'-')+'R$'+Math.abs(amt).toFixed(0);
+  row.insertBefore(p,row.firstChild);
+  while(row.children.length>12) row.removeChild(row.lastChild);
+}
+function screenShake(intensity) {
+  const board = document.getElementById('board-border');
+  if(board) {
+    board.classList.remove('screen-shake'); void board.offsetWidth;
+    board.classList.add('screen-shake');
+    setTimeout(()=>board.classList.remove('screen-shake'), 300);
+  }
+}
+function particles(color) {
+  const cv = document.getElementById('particles');
+  if(!cv) return;
+  cv.width = window.innerWidth; cv.height = window.innerHeight;
+  const ctx2 = cv.getContext('2d');
+  const pal = { gold: ['#FFD700','#FFA500','#FFF176'], pink: ['#FF006E','#FF66FF'], cyan: ['#00FFFF','#22c55e','#FFFFFF'], all: ['#FFD700','#FF006E','#39FF14'] };
+  const p2 = pal[color]||pal.gold;
+  const count = 30;
+  const ps = Array.from({length:count},()=>({
+    x: cv.width/2+(Math.random()-0.5)*300, y: cv.height/2+(Math.random()-0.5)*300,
+    vx:(Math.random()-0.5)*10, vy:-Math.random()*10-2, r: Math.random()*4+2,
+    c: p2[Math.floor(Math.random()*p2.length)], life:1, g:0.2
+  }));
+  function tick() {
+    ctx2.clearRect(0,0,cv.width,cv.height);
+    let any=false;
+    for(const p of ps) {
+      p.x+=p.vx; p.y+=p.vy; p.vy+=p.g; p.life-=0.02;
+      if(p.life>0) {
+        any=true; ctx2.globalAlpha=p.life; ctx2.fillStyle=p.c;
+        ctx2.fillRect(p.x-p.r,p.y-p.r,p.r*2,p.r*2);
+      }
+    }
+    if(any) requestAnimationFrame(tick); else ctx2.clearRect(0,0,cv.width,cv.height);
+  }
+  requestAnimationFrame(tick);
+}
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+// ===== INIT LISTENERS =====
+window.addEventListener('DOMContentLoaded', () => {
+  // Speaker dots decorativos
+  const sp = document.getElementById('gb-speaker');
+  if (sp) for (let i = 0; i < 20; i++) { const d = document.createElement('div'); d.className = 'gb-speaker-dot'; sp.appendChild(d); }
+
+  initSnake(); 
+  draw(); 
+  updateUI();
+  const replayBtn = document.getElementById('win-replay-btn');
+  if (replayBtn) {
+    replayBtn.addEventListener('click', () => {
+      const ov = document.getElementById('win-overlay');
+      if(ov) ov.classList.remove('show');
+    });
+  }
+});
+function renderLoop() {
+  if (gameRunning) draw(); requestAnimationFrame(renderLoop);
+}
+renderLoop();
+window.addEventListener('resize',()=>{
+  const cv=document.getElementById('particles');
+  if(cv) { cv.width=window.innerWidth; cv.height=window.innerHeight; }
+});
+</script>
+</body>
+</html>
